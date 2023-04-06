@@ -118,3 +118,29 @@ def get_price_history(item_name: str) -> DataFrame:
     df = pd.DataFrame.from_dict(price_list)
 
     return df
+
+
+def smoothen_price_history(df: DataFrame) -> DataFrame:
+    """
+    Aggregates hourly values for the past month into daily values so that time gaps between all values are consistent.
+
+    Parameters:
+        DataFrame: A dataframe with price history acquired from price_history
+    Returns:
+        DataFrame: A dataframe with price history with average daily prices and total daily amounts sold for the last month
+    """
+    df_copy = df.copy()
+    df_copy['Date'] = df_copy['Date'].apply(lambda x: x.date())
+    df_copy = df_copy.groupby('Date', as_index=False).agg(
+        {'Price(USD)': 'mean', 'Amount sold': 'sum'})
+    return df_copy
+
+
+def get_smooth_price_history(item_name: str) -> DataFrame:
+    """
+    Extracts price history for an item from Steam with values from the last month aggregated to have daily instead of hourly data.
+
+    Returns:
+        DataFrame: A dataframe with price history containing dates, prices and amount sold for the given item
+    """
+    return smoothen_price_history(get_price_history(item_name))
