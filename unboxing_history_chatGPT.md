@@ -1111,3 +1111,40 @@ This was incredibly helpful. That's it for now. Thanks
 You're welcome! I'm glad I could help. If you have any more questions in the future, feel free to ask. Have a great day!
 
 ***
+
+**Human:**
+2 / 2
+Hello again.
+Assume you're working with df_copy2
+I want you transform it so that unboxing numbers for each case are 30-day moving averages instead of just daily values
+
+
+***
+
+**Assistant:**
+
+Sure! You can use the `rolling` method in pandas to calculate the 30-day moving averages for each case in the `df_copy2` dataframe. Here's an example code snippet:
+
+```Python 3
+import pandas as pd
+
+# Assuming df_copy2 is the dataframe with daily unboxing numbers
+
+# Set 'Date' column as the index
+df_copy2.set_index('Date', inplace=True)
+
+# Calculate the 30-day moving averages for each case
+df_copy2_30d_ma = df_copy2.rolling('30D').mean()
+
+# Reset the index
+df_copy2_30d_ma.reset_index(inplace=True)
+
+# Display the updated dataframe with 30-day moving averages
+print(df_copy2_30d_ma)
+
+```
+
+This will create a new dataframe `df_copy2_30d_ma` with the 30-day moving averages for each case, calculated over a rolling window of 30 days. Note that the `rolling` method automatically handles cases where the data may have missing values, such as weekends or holidays, and calculates the moving averages accordingly.
+
+
+***
