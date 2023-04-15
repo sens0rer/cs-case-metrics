@@ -145,6 +145,7 @@ def get_smooth_price_history(item_name: str) -> DataFrame:
     """
     return smoothen_price_history(get_price_history(item_name))
 
+
 def get_historical_monthly_unboxing_numbers() -> DataFrame:
     """
     Extracts historical monthly unboxing numbers from csgocasetracker.com
@@ -197,6 +198,7 @@ def get_historical_monthly_unboxing_numbers() -> DataFrame:
 
     return df_transposed
 
+
 def montly_unboxing_numbers_to_daily(df: DataFrame) -> DataFrame:
     """
     Converts monthly historical unboxing numbers into daily numbers.
@@ -233,6 +235,7 @@ def montly_unboxing_numbers_to_daily(df: DataFrame) -> DataFrame:
     df_result.rename(columns={'index': 'Date'}, inplace=True)
     return df_result
 
+
 def unboxing_moving_average(df: DataFrame, n: int = 30) -> DataFrame:
     """
     Applies a moving average to daily unboxing numbers 
@@ -249,6 +252,7 @@ def unboxing_moving_average(df: DataFrame, n: int = 30) -> DataFrame:
     df_ma.reset_index(inplace=True)
     return df_ma
 
+
 def get_historical_daily_unboxing_numbers(n: int = 30) -> DataFrame:
     """
     Extracts historical monthly unboxing numbers from csgocasetracker.com, rescales them to
@@ -263,3 +267,47 @@ def get_historical_daily_unboxing_numbers(n: int = 30) -> DataFrame:
     df = montly_unboxing_numbers_to_daily(df)
     df = unboxing_moving_average(df, n)
     return df
+
+
+def update_with_recent_daily_numbers(df: DataFrame) -> DataFrame:
+    """
+    Updates historical daily unboxing numbers from csgocasetracker.com with recent values.
+
+    Parameters:
+        df(DataFrame): A dataframe with historical daily unboxing numbers for every case acquired from get_historical_daily_unboxing_numbers() or montly_unboxing_numbers_to_daily()
+    Returns:
+        DataFrame: A dataframe with historical daily unboxing numbers for every case up to today
+    """
+
+    df_expanded = df.copy()
+    df_expanded.set_index('Date', inplace=True)
+
+    # Expand the dataframe to include dates up to today
+    last_date = df_expanded.index[-1]
+    today = pd.Timestamp(dt.datetime.now().date())
+    days_to_today = (today - last_date).days
+    date_range = pd.date_range(last_date, periods=days_to_today + 1)
+    df_expansion = df_expanded.reindex(date_range)
+    df_expanded = pd.concat([df_expanded, df_expansion])
+
+    # Fill in missing values
+    df_recent = get_unboxing_numbers()
+    for _, row in df_recent.iterrows():
+        case_name = row['Case Name']
+
+        last_month = df_expanded.index[-1] - pd.DateOffset(months=1)
+        days_in_last_month = last_month.days_in_month
+        monthly_unboxing = row['Monthly Unboxing Number'] / days_in_last_month
+        weekly_unboxing = row['Weekly Unboxing Number'] / 7
+        daily_unboxing = row['Daily Unboxing Number']
+
+        df_expanded.loc[df_expanded.index[-1], case_name] = daily_unboxing
+        df_expanded.loc[df_expanded.index[-7]:df_expanded.index[-1],
+                        case_name] = df_expanded.loc[df_expanded.index[-7]:df_expanded.index[-1], case_name].fillna(weekly_unboxing)
+        df_expanded.loc[last_month:, case_name] = df_expanded.loc[last_month:, case_name].fillna(
+            monthly_unboxing)
+
+    df_expanded.reset_index(inplace=True)
+    df_expanded.rename(columns={'index': 'Date'}, inplace=True)
+
+    return df_expanded
