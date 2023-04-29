@@ -5,6 +5,8 @@ from io import StringIO
 from pandas import DataFrame
 import urllib.parse
 import datetime as dt
+from tqdm import tqdm
+from time import sleep
 
 
 def get_playercount(appid: int = 730) -> dict:
@@ -62,11 +64,15 @@ def get_unboxing_numbers() -> DataFrame:
     result['Daily Unboxing Number'] = daily_df['Unboxing Number']
     return result
 
+# TODO: Add ability to change appid for price history functions
+
 
 def get_price_history(item_name: str) -> DataFrame:
     """
-    Extracts price history for an item from Steam
+    Extracts price history for a CS:GO/CS2 item from Steam
 
+    Parameters:
+        item_name(str): Name of the CS:GO/CS2 item on Steam Community Market
     Returns:
         DataFrame: A dataframe with price history containing datetimes, prices and amount sold for the given item
     """
@@ -138,12 +144,64 @@ def smoothen_price_history(df: DataFrame) -> DataFrame:
 
 def get_smooth_price_history(item_name: str) -> DataFrame:
     """
-    Extracts price history for an item from Steam with values from the last month aggregated to have daily instead of hourly data.
+    Extracts price history for a CS:GO/CS2 item from Steam with values from the last month aggregated to have daily instead of hourly data
 
+    Parameters:
+        item_name(str): Name of the CS:GO/CS2 item on Steam Community Market
     Returns:
         DataFrame: A dataframe with price history containing dates, prices and amount sold for the given item
     """
     return smoothen_price_history(get_price_history(item_name))
+
+
+def get_price_history_for_multiple(item_list: list[str], smoothen: bool = True, delay: int = 15) -> tuple[DataFrame, DataFrame]:
+    """
+    Extracts price history for a list of CS:GO/CS2 items from Steam
+
+    Parameters:
+        item_list(list[str]): Name of the CS:GO/CS2 item on Steam Community Market
+        smoothen(bool): If True hourly values for the past month are aggregated into daily values so that time gaps between all values are consistent. Defaults to True
+        delay(int): The delay between requests to Steam Community Market in seconds. Defaults to 15
+    Returns:
+        tuple[DataFrame, DataFrame]: A list containing two dataframes (amount sold history and price history) for the given list of items
+    """
+
+    df_list = []
+    print("Getting info might take a while because of Steam rate limits")
+    print("If this process fails, consider changing the delay between requests by setting the 'delay' parameter")
+    print(f"Current delay is {delay} seconds")
+    for item in tqdm(item_list):
+        price_history = get_price_history(item)
+        if smoothen:
+            price_history = smoothen_price_history(price_history)
+        df_list.append(price_history)
+        sleep(delay)
+
+    # Compile prices
+    prices_df = pd.DataFrame()
+
+    for item, df in zip(item_list, df_list):
+        item_prices = df[['Date', 'Price(USD)']].copy()
+        item_prices.rename(columns={'Price(USD)': item}, inplace=True)
+
+        if prices_df.empty:
+            prices_df = item_prices
+        else:
+            prices_df = prices_df.merge(item_prices, on='Date', how='outer')
+
+    # Compile amounts sold
+    amounts_df = pd.DataFrame()
+
+    for item, df in zip(item_list, df_list):
+        item_amounts = df[['Date', 'Amount sold']].copy()
+        item_amounts.rename(columns={'Amount sold': item}, inplace=True)
+
+        if amounts_df.empty:
+            amounts_df = item_amounts
+        else:
+            amounts_df = amounts_df.merge(item_amounts, on='Date', how='outer')
+
+    return prices_df, amounts_df
 
 
 def get_historical_monthly_unboxing_numbers() -> DataFrame:
@@ -283,7 +341,7 @@ def update_with_recent_daily_numbers(df: DataFrame) -> DataFrame:
     df_expanded.set_index('Date', inplace=True)
 
     # Expand the dataframe to include dates up to today
-    last_date = df_expanded.index[-1]
+    last_date = df_expanded.index[-1] + pd.Timedelta(days=1)
     today = pd.Timestamp(dt.datetime.now().date())
     days_to_today = (today - last_date).days
     date_range = pd.date_range(last_date, periods=days_to_today + 1)
